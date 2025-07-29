@@ -129,6 +129,54 @@ def test_user_login(base_url: str):
     assert expires_at.tzinfo is not None, "expires_at should be timezone-aware"
     assert current_time.tzinfo is not None, "current_time should be timezone-aware"
     assert expires_at > current_time, "Token expiration should be in the future"
+    
+# ---------------------------------------------------------------------------
+# Negative Test Cases - User Registration and Login
+# ---------------------------------------------------------------------------
+
+def test_registration_short_password_fails(base_url: str):
+    """
+    Ensure registration fails when password is too short.
+    """
+    url = f"{base_url}/auth/register"
+    payload = {
+        "first_name": "Short",
+        "last_name": "Pass",
+        "email": "short.pass@example.com",
+        "username": "shortpassuser",
+        "password": "123",  # Too short
+        "confirm_password": "123"
+    }
+    response = requests.post(url, json=payload)
+    assert response.status_code == 422, f"Expected 422, got {response.status_code}. Response: {response.text}"
+    assert "String should have at least 8 characters" in response.text
+
+
+def test_login_wrong_password_fails(base_url: str):
+    """
+    Ensure login fails with incorrect password.
+    """
+    # First register a valid user
+    user_data = {
+        "first_name": "Wrong",
+        "last_name": "Password",
+        "email": "wrong.pass@example.com",
+        "username": "wrongpassuser",
+        "password": "CorrectPass123!",
+        "confirm_password": "CorrectPass123!"
+    }
+    register_and_login(base_url, user_data)
+
+    # Attempt login with wrong password
+    login_url = f"{base_url}/auth/login"
+    payload = {
+        "username": "wrongpassuser",
+        "password": "WrongPassword!"
+    }
+    response = requests.post(login_url, json=payload)
+    assert response.status_code == 401, f"Expected 401, got {response.status_code}. Response: {response.text}"
+    assert "invalid" in response.text.lower()
+
 
 # ---------------------------------------------------------------------------
 # Calculations Endpoints Integration Tests

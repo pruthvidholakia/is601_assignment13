@@ -33,6 +33,14 @@
 ---
 
 
+## GitHub Action Workflow
+
+![Github action](/screenshots/CICD.png)
+
+
+---
+
+
 ## Running Tests Locally
 
 Make sure your virtual environment is activated and dependencies installed.
