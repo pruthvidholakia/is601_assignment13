@@ -1,0 +1,260 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="w-full max-w-screen-xl mx-auto space-y-6">
+        <!-- Dashboard Header -->
+        <div class="flex justify-between items-center bg-white px-6 py-4 rounded-lg shadow-md">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Calculations Dashboard</h1>
+                <br>
+                <p class="text-sm text-gray-500"><span id="userWelcome" class="font-medium"></span></p>
+            </div>
+            <button id="logoutBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md">
+                Logout
+            </button>
+        </div>
+
+
+        <!-- New Calculation Form -->
+        <div class="bg-white p-8 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold text-gray-800">New Calculation</h2>
+            <br>
+            <form id="calculationForm" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Type</label>
+                    <select id="calcType" name="type"
+                        class="mt-1 block w-full rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="addition">Addition</option>
+                        <option value="subtraction">Subtraction</option>
+                        <option value="multiplication">Multiplication</option>
+                        <option value="division">Division</option>
+                    </select>
+                </div>
+                <div class="md:col-span-1">
+                    <label class="block text-sm font-medium text-gray-700">Numbers (comma-separated)</label>
+                    <input type="text" id="calcInputs" name="inputs" placeholder="e.g. 5,10,15"
+                        class="mt-1 block w-full rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500" />
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white w-full px-4 py-2 rounded">
+                        Calculate
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Calculation History Table -->
+        <div class="bg-white p-8 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Calculation History</h2>
+            <div class="overflow-x-auto w-full">
+                <table class="min-w-full table-auto text-sm text-left">
+                    <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
+                        <tr>
+                            <th class="px-4 py-2">Type</th>
+                            <th class="px-4 py-2">Inputs</th>
+                            <th class="px-4 py-2">Result</th>
+                            <th class="px-4 py-2">Date</th>
+                            <th class="px-4 py-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calculationsTable" class="divide-y divide-gray-200 [&>tr:nth-child(even)]:bg-gray-50">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Alerts -->
+        <div id="errorAlert" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
+            role="alert">
+            <span id="errorMessage" class="block sm:inline"></span>
+        </div>
+        <div id="successAlert"
+            class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
+            <span id="successMessage" class="block sm:inline"></span>
+        </div>
+
+    </div>
+</div>
+
+<script src="{{ url_for('static', path='js/script.js') }}"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Check if user is logged in
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            window.location.href = '/login';
+            return;
+        }
+
+        // Set welcome message
+        const username = localStorage.getItem('username');
+        document.getElementById('userWelcome').textContent = `Welcome, ${username}!`;
+
+        // Helper functions for alerts
+        function showError(message) {
+            const errorAlert = document.getElementById('errorAlert');
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorAlert.classList.remove('hidden');
+            setTimeout(() => errorAlert.classList.add('hidden'), 5000);
+        }
+
+        function showSuccess(message) {
+            const successAlert = document.getElementById('successAlert');
+            const successMessage = document.getElementById('successMessage');
+            successMessage.textContent = message;
+            successAlert.classList.remove('hidden');
+            setTimeout(() => successAlert.classList.add('hidden'), 5000);
+        }
+
+        // Load calculations
+        async function loadCalculations() {
+            try {
+                const response = await fetch('/calculations', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        // Token expired or invalid
+                        localStorage.clear();
+                        window.location.href = '/login';
+                        return;
+                    }
+                    throw new Error('Failed to load calculations');
+                }
+
+                const calculations = await response.json();
+                const tableBody = document.getElementById('calculationsTable');
+                tableBody.innerHTML = '';
+
+                if (calculations.length === 0) {
+                    // Show a message when no calculations exist
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                        No calculations found. Create your first calculation above!
+                    </td>
+                `;
+                    tableBody.appendChild(row);
+                    return;
+                }
+
+                calculations.forEach(calc => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">${calc.type}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${calc.inputs.join(', ')}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${calc.result}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(calc.created_at).toLocaleDateString()}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <button class="text-red-600 hover:text-red-900 delete-calc" data-id="${calc.id}">Delete</button>
+                    </td>
+                `;
+                    tableBody.appendChild(row);
+                });
+
+                // Add delete event listeners
+                document.querySelectorAll('.delete-calc').forEach(button => {
+                    button.addEventListener('click', async (e) => {
+                        if (!confirm('Are you sure you want to delete this calculation?')) {
+                            return;
+                        }
+
+                        const calcId = e.target.dataset.id;
+                        try {
+                            const response = await fetch(`/calculations/${calcId}`, {
+                                method: 'DELETE',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`
+                                }
+                            });
+
+                            if (!response.ok) {
+                                if (response.status === 401) {
+                                    localStorage.clear();
+                                    window.location.href = '/login';
+                                    return;
+                                }
+                                throw new Error('Failed to delete calculation');
+                            }
+
+                            showSuccess('Calculation deleted successfully');
+                            loadCalculations();
+                        } catch (error) {
+                            showError('Error deleting calculation');
+                        }
+                    });
+                });
+            } catch (error) {
+                showError('Error loading calculations');
+            }
+        }
+
+        // Handle new calculation submission
+        document.getElementById('calculationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const inputs = document.getElementById('calcInputs').value
+                .split(',')
+                .map(num => parseFloat(num.trim()))
+                .filter(num => !isNaN(num));
+
+            if (inputs.length < 2) {
+                showError('Please enter at least two valid numbers');
+                return;
+            }
+
+            const calculationData = {
+                type: document.getElementById('calcType').value,
+                inputs: inputs
+            };
+
+            try {
+                const response = await fetch('/calculations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(calculationData)
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        localStorage.clear();
+                        window.location.href = '/login';
+                        return;
+                    }
+                    throw new Error('Failed to create calculation');
+                }
+
+                showSuccess('Calculation created successfully');
+                document.getElementById('calculationForm').reset();
+                loadCalculations();
+            } catch (error) {
+                showError('Error creating calculation');
+            }
+        });
+
+        // Handle logout
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to logout?')) {
+                localStorage.clear();
+                window.location.href = '/login';
+            }
+        });
+
+        // Initial load of calculations
+        loadCalculations();
+
+        // Refresh calculations periodically (every 30 seconds)
+        setInterval(loadCalculations, 30000);
+    });
+</script>
+{% endblock %}
